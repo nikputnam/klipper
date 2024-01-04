@@ -161,9 +161,15 @@ class PrinterExtruder:
         # Setup hotend heater
         shared_heater = config.get('shared_heater', None)
         pheaters = self.printer.load_object(config, 'heaters')
+        self.cold = config.get('cold')
+        cold = self.cold
+        print("cold: ",cold)
         gcode_id = 'T%d' % (extruder_num,)
         if shared_heater is None:
-            self.heater = pheaters.setup_heater(config, gcode_id)
+            if cold:
+                self.heater = None
+            else:
+                self.heater = pheaters.setup_heater(config, gcode_id)
         else:
             config.deprecate('shared_heater')
             self.heater = pheaters.lookup_heater(shared_heater)
@@ -214,10 +220,13 @@ class PrinterExtruder:
     def update_move_time(self, flush_time, clear_history_time):
         self.trapq_finalize_moves(self.trapq, flush_time, clear_history_time)
     def get_status(self, eventtime):
-        sts = self.heater.get_status(eventtime)
-        sts['can_extrude'] = self.heater.can_extrude
-        if self.extruder_stepper is not None:
-            sts.update(self.extruder_stepper.get_status(eventtime))
+        if self.heater == None:
+           return {'can_extrude': True}
+        else:
+           sts = self.heater.get_status(eventtime)
+           sts['can_extrude'] = self.heater.can_extrude
+           if self.extruder_stepper is not None:
+               sts.update(self.extruder_stepper.get_status(eventtime))
         return sts
     def get_name(self):
         return self.name
@@ -226,10 +235,13 @@ class PrinterExtruder:
     def get_trapq(self):
         return self.trapq
     def stats(self, eventtime):
-        return self.heater.stats(eventtime)
+        if not self.heater is None:
+            return self.heater.stats(eventtime)
+        else:
+            return False, ''
     def check_move(self, move):
         axis_r = move.axes_r[3]
-        if not self.heater.can_extrude:
+        if (not self.cold) and  not self.heater.can_extrude:
             raise self.printer.command_error(
                 "Extrude below minimum temp\n"
                 "See the 'min_extrude_temp' config option for details")
@@ -280,6 +292,8 @@ class PrinterExtruder:
         return self.extruder_stepper.find_past_position(print_time)
     def cmd_M104(self, gcmd, wait=False):
         # Set Extruder Temperature
+        if self.cold:
+           return
         temp = gcmd.get_float('S', 0.)
         index = gcmd.get_int('T', None, minval=0)
         if index is not None:

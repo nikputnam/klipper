@@ -726,9 +726,11 @@ class MCU:
         get_config_cmd = self.lookup_query_command(
             "get_config",
             "config is_config=%c crc=%u is_shutdown=%c move_count=%hu")
+        #print(get_config_cmd)
         if self.is_fileoutput():
             return { 'is_config': 0, 'move_count': 500, 'crc': 0 }
         config_params = get_config_cmd.send()
+        #print(config_params)
         if self._is_shutdown:
             raise error("MCU '%s' error during config: %s" % (
                 self._name, self._shutdown_msg))
